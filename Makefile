@@ -8,6 +8,8 @@ setup:
 	sudo chmod -R 777 storage/logs/nginx
 	docker compose build
 	docker compose up -d
+	docker compose exec -T -u fpm_user $(APP_CONTAINER) composer install
+	@grep -qE '^APP_KEY=.+' .env || docker compose exec -T -u fpm_user $(APP_CONTAINER) php artisan key:generate --no-interaction
 	@echo "Waiting for MySQL..."
 	@i=1; \
 	while [ $$i -le 30 ]; do \
@@ -22,8 +24,6 @@ setup:
 		sleep 2; \
 		i=$$((i + 1)); \
 	done
-	docker compose exec -T -u fpm_user $(APP_CONTAINER) composer install
-	@grep -qE '^APP_KEY=.+' .env || docker compose exec -T -u fpm_user $(APP_CONTAINER) php artisan key:generate --no-interaction
 	docker compose exec -T -u fpm_user $(APP_CONTAINER) bash -c "sudo chmod -R 777 storage/framework storage/logs || chmod -R 777 storage/framework storage/logs"
 	docker compose exec -T -u fpm_user $(APP_CONTAINER) php artisan storage:link --no-interaction || true
 	docker compose exec -T -u fpm_user $(APP_CONTAINER) php artisan migrate --seed --no-interaction
