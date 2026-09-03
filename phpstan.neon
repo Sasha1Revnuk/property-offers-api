@@ -15,10 +15,9 @@ parameters:
         - bootstrap/
         - storage/
         - vendor/
-        - node_modules/
         - public/
         - lang/
-        - resources/views/
+        - resources/
 
     # Maximum settings for Level 8
     checkUninitializedProperties: true

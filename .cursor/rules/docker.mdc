@@ -1,0 +1,90 @@
+---
+description: Run PHP, Composer, and Artisan commands inside the Docker php service
+alwaysApply: true
+---
+
+# Docker Development Environment
+
+This API runs in Docker (`docker-compose.yml`). **Do not run `php`, `composer`, or `php artisan` on the host** unless the user explicitly asks.
+
+All application commands go through the **`php` service**. Project root is mounted at `/var/www`. The image is `php:8.5-fpm` with Composer. There is no Node.js or npm in the stack.
+
+## Stack
+
+| Service | Image / role |
+|---------|----------------|
+| `php` | `php:8.5-fpm` — PHP-FPM + Composer. **Run app commands here.** Compose user is `1000:1000`. |
+| `nginx` | `nginx:alpine` — HTTP/HTTPS reverse proxy to PHP-FPM |
+| `db` | `mysql/mysql-server:8.0.23` |
+| `redis` | `redis:7-alpine` — cache (`CACHE_STORE=redis`) and queues (`QUEUE_CONNECTION=redis`) |
+| `queue` | same PHP image — `php artisan queue:work redis` |
+
+Network: `property-offers-api`.
+
+Container names (prefix via `DOCKER_SERVICES_NAME`, default `property-offers-api`):
+
+`{prefix}_php`, `{prefix}_nginx`, `{prefix}_db`, `{prefix}_redis`, `{prefix}_queue`.
+
+Host ports (compose defaults; override with env):
+
+| Variable | Default | Container |
+|----------|---------|-----------|
+| `DOCKER_SERVICES_URL_PORT` | `5000` | nginx `:80` |
+| `DOCKER_SERVICES_HTTPS_PORT` | `8143` | nginx `:443` |
+| `DOCKER_SERVICES_DB_PORT` | `33036` | MySQL `:3306` |
+| `DOCKER_SERVICES_REDIS_PORT` | `63079` | Redis `:6379` |
+
+Inside the app network Laravel uses `DB_HOST=db`, `DB_PORT=3306`, `REDIS_HOST=redis`, `REDIS_PORT=6379`.
+
+## Command pattern
+
+From the project root:
+
+```bash
+docker compose exec php <command>
+```
+
+Agents: add `-T` (no TTY):
+
+```bash
+docker compose exec -T php php artisan migrate --no-interaction
+docker compose exec -T php composer lint:check
+docker compose exec -T php composer types:check
+docker compose exec -T php php artisan test --compact
+```
+
+Examples:
+
+```bash
+docker compose exec php composer install
+docker compose exec php composer lint
+docker compose exec php php artisan route:list --path=api
+```
+
+Makefile (optional shortcuts; still Docker, user `fpm_user`): `make up`, `make down`, `make build`, `make php`, `make stan`, `make swagger`, `make init`.
+
+## Agent permissions
+
+Agents may run `docker compose exec php ...` **without asking**, including `php artisan` (migrate, test, make:*, route:list) and `composer` (install, lint, stan, test).
+
+If containers are not running: `docker compose up -d`.
+
+**Not allowed** without an explicit user request: `docker compose down -v`, wiping `docker/services/mysql/data` or Redis data, `docker compose build --no-cache`, or any command that destroys database data.
+
+## Database
+
+Laravel `.env`: `DB_CONNECTION=mysql`, `DB_HOST=db`, credentials `DB_DATABASE` / `DB_USERNAME` / `DB_PASSWORD`.
+
+Do not use `psql`. The `db` service MySQL client often cannot use the socket on this bind mount — query via the `php` container and TCP:
+
+```bash
+docker compose exec -T php php artisan db:show
+```
+
+## Local URL
+
+nginx listens on host port **5000** (HTTP). Hit that port, not Laravel’s skeleton `APP_URL` (`localhost:8000` in `.env.example`).
+
+- `GET /` — JSON API info
+- `GET /api/health`
+- `GET /up` — Laravel health

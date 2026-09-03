@@ -1,0 +1,41 @@
+---
+description: Property Offers API stack, architecture, and project conventions
+alwaysApply: true
+---
+
+# Property Offers API
+
+JSON API for property offers. **No SPA, no Inertia, no Vue UI.** Backend **Laravel 13**, runtime **PHP 8.5** (Docker `php:8.5-fpm`), database **MySQL 8.0.23**, cache/queues **Redis 7**.
+
+## Stack
+
+| Layer | Technology |
+|-------|------------|
+| API | Laravel 13, PHP 8.5 |
+| Database | MySQL 8.0.23 (`db` Docker service) |
+| Cache / queue | Redis 7 (`redis` + `queue` services) |
+| Tests | PHPUnit |
+| Dev environment | Docker Compose — see `docker` rule |
+
+Installed PHP packages: `composer.json` / `composer.lock`. Do not assume Fortify, Sanctum, Wayfinder, Inertia, Echo, or a Vue app are in use — they are not application dependencies.
+
+Laravel Boost MCP runs **inside Docker** (see `.cursor/mcp.json`). Do **not** run `boost:install` / `boost:update` — they overwrite Cursor skills, `AGENTS.md`, and MCP config. `composer update` does not call Boost update.
+
+Use Boost `search-docs` only for packages that are actually installed.
+
+## Conventions
+
+- This is an **API**: JSON under `/api/v1`, thin controllers → services. No Blade/Inertia, no session, no auth.
+- Models: persistence only. Business logic in `app/Services/<Name>/` — see `laravel-architecture`
+- Versioned HTTP: `app/Http/Controllers/Api/V1/` — see `api-v1`
+- User-facing PHP strings: `lang/en/` + `TranslationHelper` (see `laravel-architecture`)
+- Activate the relevant skill from `.cursor/skills/` before working in that domain
+- Check sibling files first — match existing patterns in this repo
+
+## Related rules
+
+- `docker` — `php artisan` and `composer` inside the `php` container
+- `code-quality` — Pint, PHPStan level 8, `Model::shouldBeStrict()`
+- `laravel-architecture` — services, DTOs, enums, thin controllers
+- `api-v1` — `/api/v1` envelope, OpenAPI, no auth
+- `backend-testing` — unit tests for every public service method

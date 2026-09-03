@@ -1,0 +1,143 @@
+---
+description: Laravel architecture — thin API controllers, service layer, DTOs, enums, lang/en strings
+globs: app/**/*.php,routes/**/*.php,lang/**/*.php
+alwaysApply: false
+---
+
+# Laravel Architecture
+
+Applies to **API code**: `routes/api.php`, API controllers, Form Requests, services, and API resources. JSON only — no Inertia, Blade, or session flash.
+
+Activate `laravel-best-practices` skill for query, security, and testing depth.
+
+## Layer responsibilities
+
+| Layer | Responsibility | Location |
+|-------|----------------|----------|
+| **Model** | Persistence only: relationships, casts, `$fillable`, factories | `app/Models/` |
+| **Controller** | HTTP: receive request → call service → return JSON | `app/Http/Controllers/` |
+| **Form Request** | Validation rules and `authorize()` | `app/Http/Requests/` |
+| **Service** | All business logic | `app/Services/<Name>/` |
+
+### Models — no business logic
+
+Models must **not** contain business logic. Allowed: relationships, casts, fillable/hidden, accessors that only format already-loaded data.
+
+```php
+// ❌ Business logic in model
+public function activate(): void { $this->status = 'active'; $this->save(); ... }
+
+// ✅ Logic in service; model is data-only
+```
+
+### Controllers — thin
+
+Controllers validate (via Form Request), delegate to a domain service interface, return the **API v1 envelope** via `ApiServiceInterface` (see `api-v1`). No business rules inline.
+
+```php
+public function store(StoreOfferRequest $request): JsonResponse
+{
+    $offer = $this->offerService->create(CreateOfferDto::fromRequest($request));
+
+    return $this->apiService->created(
+        TranslationHelper::get('translations.offer.created'),
+        new OfferResource($offer),
+    );
+}
+```
+
+Illustrative names only — not existing classes.
+
+## Service layer structure
+
+Each domain gets a folder under `app/Services/<Name>/`:
+
+```
+app/Services/Offer/
+├── Contracts/
+│   └── OfferServiceInterface.php   # every public service method declared here
+├── Dto/
+│   └── CreateOfferDto.php          # when >3 params or structured input needed
+├── Enumerators/
+│   └── OfferStatusEnumerator.php   # PHP backed enum for domain constants
+└── OfferService.php                # implements OfferServiceInterface
+```
+
+### Interface + DI binding
+
+- Every public method on `<Name>Service` must exist on `<Name>ServiceInterface`
+- Bind in a service provider (`AppServiceProvider` or domain provider):
+
+```php
+$this->app->bind(OfferServiceInterface::class, OfferService::class);
+```
+
+- Inject **the interface**, never the concrete class, in controllers and other services
+
+### DTOs
+
+Use a DTO when a service method needs **more than 3 parameters** or a structured input object.
+
+- Location: `app/Services/<Name>/Dto/<DtoName>.php`
+- Prefer readonly classes with typed constructor properties
+- Factory methods like `fromRequest(FormRequest $request)` are acceptable
+
+### Enumerators
+
+Any textual value used in conditions, comparisons, or domain state must be a **PHP backed enum** — not a magic string.
+
+- Location: `app/Services/<Name>/Enumerators/<Name>Enumerator.php`
+- Use enum cases in `match`, `===`, and database casts where applicable
+
+```php
+// ❌
+if ($offer->status === 'pending') { ... }
+
+// ✅
+if ($offer->status === OfferStatusEnumerator::Pending) { ... }
+```
+
+## Translations — no hardcoded text in PHP
+
+Default locale is **`en`** (`config/app.php`, `APP_LOCALE`). Any Laravel-side text visible to API clients must come from `lang/en/` — never hardcoded in controllers, Form Requests, services, or API Resources.
+
+### Lang file layout
+
+| File | Purpose |
+|------|---------|
+| `lang/en/translations.php` | API copy: JSON messages, labels |
+| `lang/en/validation.php` | Validation messages |
+| `lang/en/auth.php`, `passwords.php`, … | Framework/domain auth strings |
+| `lang/en/{domain}.php` | Optional — when a domain outgrows `translations.php` |
+
+```php
+// ❌
+return response()->json(['message' => 'Saved.']);
+
+// ✅ — TranslationHelper for a PHPStan-safe string
+return response()->json(['message' => TranslationHelper::get('translations.offer.created')]);
+```
+
+Use `App\Support\TranslationHelper`:
+
+| Method | Returns | Use for |
+|--------|---------|---------|
+| `get($key, $replace = [])` | `string` | Single JSON messages |
+| `getArray($key)` | `array<string, string>` | A translation group (current locale) |
+| `localizedArrays(...$keys)` | `array<string, array<string, string>>` | Bundled groups keyed by locale (`en`) |
+
+Do **not** use `__()` where a `string` is required — PHPStan level 8 rejects it. Validation rule messages in Form Requests may still use Laravel's built-in validation translation keys.
+
+Enum labels shown to clients also resolve via `lang/en/`.
+
+Add new client-facing keys to `lang/en/translations.php` (or a domain file). Do not embed text literals in PHP classes.
+
+## New feature checklist
+
+1. Form Request with validation (messages via lang keys)
+2. Service interface + implementation + provider binding
+3. DTO if >3 params
+4. Enum for any new status/type/value used in conditions
+5. Thin controller wired through DI, JSON response
+6. **Unit tests**: every public service method in `tests/Unit/Services/{Name}/` — see `backend-testing`
+7. Feature test for HTTP contract (success, validation 422, auth 401/403 if applicable)

@@ -11,20 +11,12 @@ init:
 	docker compose exec -u fpm_user -t -i $(APP_CONTAINER) bash -c "sudo chmod -R 777 storage/framework"
 	docker compose exec -u fpm_user -t -i $(APP_CONTAINER) bash -c "sudo chmod -R 777 storage/logs"
 	docker compose exec -u fpm_user -t -i $(APP_CONTAINER) bash -c "php artisan storage:link"
-	docker compose exec $(APP_CONTAINER) bash -c "npm i"
-	docker compose exec $(APP_CONTAINER) bash -c "npm run build"
 
 build:
 	docker compose build
 
 up:
 	docker compose up -d
-
-dev:
-	docker compose exec $(APP_CONTAINER) bash -c "npm run dev"
-
-prod:
-	docker compose exec $(APP_CONTAINER) bash -c "npm run build"
 
 down:
 	docker compose down
@@ -34,5 +26,8 @@ php:
 
 stan:
 	docker compose exec -u fpm_user $(APP_CONTAINER) bash -c "composer stan"
+
+swagger:
+	docker compose exec -u fpm_user $(APP_CONTAINER) bash -c "php artisan l5-swagger:generate --no-interaction"
 
 

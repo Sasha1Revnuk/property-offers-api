@@ -1,0 +1,120 @@
+---
+description: Backend testing — cover every public service method; feature tests for HTTP
+globs: tests/**/*.php,app/Services/**/*.php
+alwaysApply: false
+---
+
+# Backend Testing
+
+Activate `laravel-best-practices` skill → `rules/testing.md` for factories, fakes, and assertions.
+
+Run tests inside Docker — see `docker` rule.
+
+Framework: **PHPUnit** classes (`php artisan make:test --phpunit {Name}`). Do not add Pest.
+
+## Test layers
+
+| Layer | Location | Covers |
+|-------|----------|--------|
+| **Service** | `tests/Unit/Services/{Name}/{Name}ServiceTest.php` | Every **public** method on `{Name}ServiceInterface` / `{Name}Service` |
+| **Feature** | `tests/Feature/` | HTTP: auth (401/403), validation (422), JSON status — not every service edge case |
+| **Support/helpers** | `tests/Unit/` | Pure PHP without HTTP (e.g. `TranslationHelper`) |
+
+Business logic lives in services — **service tests are mandatory** for new or changed services.
+
+## Service test requirements
+
+When adding or changing `app/Services/{Name}/`:
+
+1. Create or update `tests/Unit/Services/{Name}/{Name}ServiceTest.php`
+2. **Every public method** on the service interface must have at least one test
+3. Add separate tests for failure paths and edge cases where behavior differs (not one test per method only — cover meaningful branches)
+4. Resolve the service via **`{Name}ServiceInterface`** (validates DI binding):
+
+```php
+$service = $this->app->make(OfferServiceInterface::class);
+```
+
+5. Do **not** test private or protected methods directly
+6. Do **not** test pass-through controllers — test the service instead
+
+### Dependencies
+
+| Dependency | Approach |
+|------------|----------|
+| Another `*ServiceInterface` | Mockery mock → `$this->app->instance(Interface::class, $mock)` |
+| Database / Eloquent | `LazilyRefreshDatabase` + factories (add the trait on the test class) |
+| Mail, Queue, Events | Fakes (`Mail::fake()`, `Event::fake()`) **after** factory setup |
+
+### Example structure
+
+Illustrative only — names are placeholders, not existing classes:
+
+```php
+namespace Tests\Unit\Services\Offer;
+
+use App\Services\Offer\Contracts\OfferServiceInterface;
+use App\Services\Offer\Dto\CreateOfferDto;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
+
+class OfferServiceTest extends TestCase
+{
+    use LazilyRefreshDatabase;
+
+    #[Test]
+    public function create_persists_offer(): void
+    {
+        $offer = $this->app->make(OfferServiceInterface::class)->create(
+            new CreateOfferDto(title: 'Flat downtown', price: 100_000),
+        );
+
+        $this->assertModelExists($offer);
+        $this->assertSame('Flat downtown', $offer->title);
+    }
+}
+```
+
+Service tests that need the container or Eloquent must extend `Tests\TestCase` (not bare `PHPUnit\Framework\TestCase`).
+
+### Assertions
+
+- Prefer `assertModelExists()`, `assertSame()`, `assertNull()` over raw `assertDatabaseHas()` when asserting models
+- Use factory **states** instead of manual attribute overrides where states exist
+- Prefer descriptive test names: `create_rejects_negative_price`
+
+## Feature tests
+
+- One feature test file per HTTP area (e.g. `tests/Feature/Offers/OfferStoreTest.php`)
+- Cover: guest/auth 401/403, successful request, validation errors
+- Avoid duplicating every service edge case — that belongs in `{Name}ServiceTest`
+
+## Running tests
+
+Agents may run tests **without asking first**:
+
+```bash
+# Changed service
+docker compose exec -T php php artisan test --compact tests/Unit/Services/Offer/OfferServiceTest.php
+
+# Single test
+docker compose exec -T php php artisan test --compact --filter=create_persists_offer
+
+# All unit / feature
+docker compose exec -T php php artisan test --compact --testsuite=Unit
+docker compose exec -T php php artisan test --compact --testsuite=Feature
+
+# Full check (lint + stan + tests)
+docker compose exec -T php composer test
+```
+
+After service changes, run the matching service test file before finishing.
+
+## Checklist for new service methods
+
+- [ ] Public method added to `{Name}ServiceInterface` and `{Name}Service`
+- [ ] Binding in service provider
+- [ ] At least one test per public method in `{Name}ServiceTest`
+- [ ] Edge/failure tests for non-trivial branches
+- [ ] Feature test updated only if HTTP contract changed

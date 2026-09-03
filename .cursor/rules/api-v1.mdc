@@ -1,0 +1,235 @@
+---
+description: API v1 — routes, controllers, Swagger, unified JSON envelope (no auth)
+globs: routes/api/**/*.php,routes/api.php,app/Http/Controllers/Api/**/*.php,app/Http/Requests/Api/**/*.php,app/Http/Resources/Api/**/*.php,app/OpenApi/**/*.php,app/Services/Api/**/*.php,app/Support/ApiDateTimeFormatter.php,tests/Feature/Api/**/*.php,config/l5-swagger.php
+alwaysApply: false
+---
+
+# API v1
+
+Public JSON API under **`/api/v1/*`**. No authentication, no session, no Sanctum.
+
+Activate `laravel-best-practices` and `api-v1-development` before implementing endpoints. For OpenAPI attributes, activate `api-swagger-docs`.
+
+## Architecture
+
+```
+Client
+  → /api/v1/*
+  → Api/V1 controllers (thin)
+  → ApiService (unified JSON envelope)
+  → app/Services/<Domain>/ (business logic)
+  → Models
+```
+
+**Never duplicate business logic** in API controllers — reuse domain services.
+
+## Directory layout
+
+| Layer | Location |
+|-------|----------|
+| Routes | `routes/api.php`, `routes/api/v1.php` |
+| Controllers | `app/Http/Controllers/Api/V1/` |
+| Form Requests | `app/Http/Requests/Api/V1/<Domain>/` |
+| JSON Resources | `app/Http/Resources/Api/V1/<Domain>/` |
+| Response service | `app/Services/Api/` |
+| OpenAPI annotations | `app/OpenApi/` |
+| Feature tests | `tests/Feature/Api/V1/` |
+
+## Routing
+
+- Versioned prefix: `/api/v1/`
+- Route names: `api.v1.<resource>.<action>`
+- Register via `bootstrap/app.php` `api: routes/api.php` (that file loads `v1`)
+- Version in the URL from day one; add `v2` only on a breaking contract change
+
+### Health (unversioned)
+
+Keep liveness **outside** `/api/v1`:
+
+| Path | Role |
+|------|------|
+| `GET /api/health` | App JSON health for nginx / monitors |
+| `GET /up` | Laravel framework health |
+
+Do **not** put health under `/api/v1/health`. Probes and compose checks must not break when the resource API moves to `v2`. Versioned routes are the product contract; health is operations.
+
+## Controllers — thin
+
+1. Form Request validates (`authorize()` may be `true` — there is no auth)
+2. Delegate to a domain service interface (DI)
+3. Return via `ApiServiceInterface` — **never** `response()->json()` on versioned endpoints
+
+## Unified JSON envelope
+
+All `/api/v1` responses go through `ApiService`.
+
+Top level is **always** `success`, `message`, `data` (plus `errors` only on failure). No top-level `meta` — pagination lives inside `data`.
+
+**Single object (show, create, update):**
+```json
+{ "success": true, "message": "...", "data": { "id": 1, "status": "pending" } }
+```
+
+**Paginated list (one list per endpoint):**
+```json
+{
+  "success": true,
+  "message": "...",
+  "data": {
+    "items": [ { "id": 1 }, { "id": 2 } ],
+    "pagination": {
+      "current_page": 1,
+      "per_page": 20,
+      "total": 150,
+      "last_page": 8
+    }
+  }
+}
+```
+
+**Multiple paginated lists in one response** (e.g. dashboard):
+```json
+{
+  "success": true,
+  "message": "...",
+  "data": {
+    "offers": {
+      "items": [ ... ],
+      "pagination": { "current_page": 1, "per_page": 10, "total": 42, "last_page": 5 }
+    },
+    "stats": {
+      "items": [ ... ],
+      "pagination": { "current_page": 1, "per_page": 5, "total": 3, "last_page": 1 }
+    }
+  }
+}
+```
+
+**Non-paginated list** (small fixed set, e.g. enum options):
+```json
+{ "success": true, "message": "...", "data": { "items": [ ... ] } }
+```
+
+**Error:**
+```json
+{ "success": false, "message": "...", "errors": { "field": ["..."] } }
+```
+
+### `data` shape rules
+
+| Response type | `data` shape |
+|---------------|--------------|
+| Single resource | object |
+| Paginated list | `{ items, pagination }` |
+| Multiple paginated lists | `{ <key>: { items, pagination }, ... }` |
+| Small fixed list | `{ items }` (no `pagination`) |
+
+Use `PaginatedResource` / `PaginatedCollection` in `app/Http/Resources/Api/V1/` to build `{ items, pagination }` consistently.
+
+Use `TranslationHelper::get()` for user-facing `message` strings — no hardcoded text in PHP.
+
+Resources: `SuccessResource`, `ErrorResource`, `EnumValueResource` in `app/Http/Resources/Api/V1/`.
+
+### Enum fields in JSON responses
+
+Any enum-backed field (status, type, filter options, etc.) **must** be:
+
+```json
+{ "value": "active", "label": "Active" }
+```
+
+Never return a bare string like `"status": "active"`. Use `EnumValueResource` (enum must expose `getLabel()`). OpenAPI: typed `*EnumValue` schema with a full `enum` list — not a shared example-only `EnumValue`.
+
+Labels and docs examples are **English**.
+
+### Date-time fields
+
+All API date-times (request and response) use **ISO 8601 UTC with `Z`**, e.g. `2026-09-03T17:07:00Z`.
+
+Use `ApiDateTimeFormatter` in `app/Support/ApiDateTimeFormatter.php`. Do not use `d-m-Y H:i` or timezone-less local strings.
+
+## Auth
+
+There is **no authentication**. Do not add Sanctum, API tokens, session cookies, or `auth` middleware on `/api/v1`. Do not invent 401/403 for “missing user”.
+
+## Swagger (L5-Swagger)
+
+Activate **`api-swagger-docs`** when writing or changing OpenAPI.
+
+Every endpoint must document **all applicable HTTP responses**.
+
+Prose (`summary`, `description`, tags) is **English**. `{value,label}` fields must `ref` a typed `*EnumValue` schema with a full `enum` list. Docs must match Resources / Form Requests.
+
+### Response matrix (required per endpoint)
+
+| Component | HTTP | When |
+|-----------|------|------|
+| Success / Created | 200 / 201 | Happy path |
+| NotFound | 404 | Resource not found (when the route has `{model}`) |
+| ValidationError | 422 | Form Request / header validation |
+| TooManyRequests | 429 | Rate limit |
+| ServerError | 500 | Unexpected server error |
+
+Do not require 401/403 — there is no auth.
+
+Reuse shared components:
+
+```
+app/OpenApi/
+├── OpenApi.php           # Info, servers
+├── Parameters/           # page, per_page, ...
+├── Responses/            # 404, 422, 500, 429
+└── Schemas/              # envelopes, domain DTOs
+```
+
+- Endpoint docs on controller methods; schemas in `app/OpenApi/Schemas/`
+- Shared responses: `ref: '#/components/responses/...'`
+- Mirror the JSON envelope in `SuccessEnvelope` / `ErrorEnvelope`
+
+### Environment config
+
+| Env var | Purpose |
+|---------|---------|
+| `APP_URL` | Base URL for the current environment |
+| `L5_SWAGGER_CONST_HOST` | OpenAPI server URL (= `APP_URL`) |
+| `L5_SWAGGER_GENERATE_ALWAYS` | `true` on local/dev, `false` on prod |
+| `API_DOCS_ENABLED` | Gate Swagger UI; `false` → 404 on prod |
+
+### Generated docs (do not commit)
+
+Source of truth is `#[OA]` under `app/OpenApi/` and `Api/V1` controllers.
+
+- Output: `storage/api-docs/api-docs.json` (gitignored)
+- Local/dev: refresh on docs request, or **`make swagger`**
+- Prod: `API_DOCS_ENABLED=false`. Staging with `GENERATE_ALWAYS=false`: run `php artisan l5-swagger:generate --no-interaction` in deploy — never commit the JSON.
+
+```bash
+make swagger
+# equivalent:
+docker compose exec -T php php artisan l5-swagger:generate --no-interaction
+```
+
+## Logging
+
+- Channel: `api` (daily driver, `storage/logs/api.log`)
+- Middleware logs: request_id, method, path, ip, user_agent, status_code, duration_ms
+- 5xx: full trace in log, generic message to the client
+- Env: `API_LOG_LEVEL` (default `debug`)
+
+## New endpoint checklist
+
+1. Route in `routes/api/v1.php`
+2. Controller in `Api/V1/`
+3. Form Request with validation
+4. Domain service interface
+5. Response via `ApiServiceInterface`
+6. OpenAPI attributes with shared `ref` components
+7. Feature test in `tests/Feature/Api/V1/`
+8. `make swagger` and check Swagger UI when docs are enabled
+
+## Related rules
+
+- `laravel-architecture` — services, DTOs, enums, `TranslationHelper`
+- `backend-testing` — service unit tests + feature tests
+- `docker` — commands in the `php` container
+- `code-quality` — Pint, PHPStan level 8
