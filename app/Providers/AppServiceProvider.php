@@ -8,6 +8,8 @@ use App\Services\Import\Contracts\ImportServiceInterface;
 use App\Services\Import\ImportService;
 use App\Services\Property\Contracts\PropertySearchServiceInterface;
 use App\Services\Property\PropertySearchService;
+use App\Services\Reservation\Contracts\ReservationServiceInterface;
+use App\Services\Reservation\ReservationService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -27,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(ApiServiceInterface::class, ApiService::class);
         $this->app->bind(ImportServiceInterface::class, ImportService::class);
         $this->app->bind(PropertySearchServiceInterface::class, PropertySearchService::class);
+        $this->app->bind(ReservationServiceInterface::class, ReservationService::class);
     }
 
     /**
