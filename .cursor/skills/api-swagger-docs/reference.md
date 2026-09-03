@@ -61,7 +61,8 @@ Add a row when a real enumerator is documented. Do not reuse another schema’s 
 
 | OpenAPI schema | Typical JSON field |
 |----------------|-------------------|
-| `OfferStatusEnumValue` | offer `status` (example only until the enumerator exists) |
+| `ImportStatusEnumValue` | import `status` |
+| `ReservationStatusEnumValue` | reservation `status` |
 
 If a field is missing from this table, read the enumerator.
 

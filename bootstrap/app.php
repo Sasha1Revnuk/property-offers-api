@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\OfferSoldOutException;
+use App\Http\Middleware\EnsureApiDocsEnabled;
 use App\Services\Api\Contracts\ApiServiceInterface;
 use App\Support\TranslationHelper;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -19,16 +20,40 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
         then: function (): void {
-            Route::get('/', function () {
+            Route::get('/', function (Request $request) {
+                if (config('api.docs_enabled')) {
+                    return redirect('/api/documentation');
+                }
+
                 return response()->json([
                     'message' => 'Property Offers API',
                     'health' => url('/api/health'),
                 ]);
             });
+
+            Route::fallback(function (Request $request) {
+                $accept = strtolower((string) $request->header('Accept', ''));
+                $prefersHtml = str_contains($accept, 'text/html');
+
+                if (
+                    config('api.docs_enabled')
+                    && $prefersHtml
+                    && ! $request->is('api/*')
+                    && ! $request->is('up')
+                    && ! $request->is('docs')
+                    && ! $request->is('docs/*')
+                ) {
+                    return redirect('/api/documentation');
+                }
+
+                abort(404);
+            });
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias([
+            'api.docs' => EnsureApiDocsEnabled::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
