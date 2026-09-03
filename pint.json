@@ -1,5 +1,8 @@
 {
   "preset": "psr12",
+  "exclude": [
+    "docker"
+  ],
   "rules": {
     "binary_operator_spaces": {
       "default": "single_space"
