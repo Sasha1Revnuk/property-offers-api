@@ -39,6 +39,8 @@ Defaults in `.env.example` use Compose service hostnames (`DB_HOST=db`, `REDIS_H
 make setup
 ```
 
+`make setup` may prompt for sudo. The PHP container user (`fpm_user`) password is **`123`**.
+
 This will:
 
 1. Copy `.env.example` → `.env` if `.env` is missing
