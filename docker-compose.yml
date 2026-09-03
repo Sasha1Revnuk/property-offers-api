@@ -1,0 +1,108 @@
+networks:
+  property-offers-api:
+
+services:
+
+  #PHP Service
+  php:
+    build:
+      context: .
+      dockerfile: ./docker/services/php/Dockerfile
+      args:
+        WWWUSERID: '${DOCKER_SERVICES_PHP_WWWUSERID:-1000}'
+    image: ${DOCKER_SERVICES_NAME:-property-offers-api}_php_image
+    container_name: ${DOCKER_SERVICES_NAME:-property-offers-api}_php
+    restart: unless-stopped
+    tty: true
+    user: "1000:1000"
+    environment:
+      DOCKER_SERVICES_NAME: app
+      SERVICE_TAGS: dev
+      PHP_IDE_CONFIG: "serverName=${DOCKER_SERVICES_NAME:-property-offers-api}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/services/php/local-php.ini:/usr/local/etc/php/conf.d/local-php.ini
+    networks:
+      - property-offers-api
+    depends_on:
+      - db
+      - redis
+
+
+  #Nginx Service
+  nginx:
+    image: nginx:alpine
+    container_name: ${DOCKER_SERVICES_NAME:-property-offers-api}_nginx
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "${DOCKER_SERVICES_URL_PORT:-5000}:80"
+      - "${DOCKER_SERVICES_HTTPS_PORT:-8143}:443"
+    volumes:
+      - ./:/var/www
+      - ./docker/services/nginx/conf.d/:/etc/nginx/conf.d/
+      - ./docker/services/nginx/cert/:/etc/nginx/cert/
+    networks:
+      - property-offers-api
+    depends_on:
+      - php
+
+
+  #MySQL Service
+  db:
+    container_name: ${DOCKER_SERVICES_NAME:-property-offers-api}_db
+    image: mysql/mysql-server:8.0.23
+    restart: unless-stopped
+    ports:
+      - "${DOCKER_SERVICES_DB_PORT:-33036}:3306"
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: 123
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      SERVICE_TAGS: dev
+      DOCKER_SERVICES_NAME: mysql
+    volumes:
+      - ./docker/services/mysql/data:/var/lib/mysql/
+      - ./docker/services/mysql/conf/my.cnf:/etc/mysql/my.cnf
+    networks:
+      - property-offers-api
+
+
+  #Redis Service
+  redis:
+    image: redis:7-alpine
+    container_name: ${DOCKER_SERVICES_NAME:-property-offers-api}_redis
+    restart: unless-stopped
+    ports:
+      - "${DOCKER_SERVICES_REDIS_PORT:-63079}:6379"
+    volumes:
+      - ./docker/services/redis/data:/data
+    networks:
+      - property-offers-api
+
+
+  #Queue Worker Service
+  queue:
+    build:
+      context: .
+      dockerfile: ./docker/services/php/Dockerfile
+      args:
+        WWWUSERID: '${DOCKER_SERVICES_PHP_WWWUSERID:-1000}'
+    image: ${DOCKER_SERVICES_NAME:-property-offers-api}_php_image
+    container_name: ${DOCKER_SERVICES_NAME:-property-offers-api}_queue
+    restart: unless-stopped
+    user: "1000:1000"
+    working_dir: /var/www
+    command: php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600 --backoff=5
+    volumes:
+      - ./:/var/www
+      - ./docker/services/php/local-php.ini:/usr/local/etc/php/conf.d/local-php.ini
+    networks:
+      - property-offers-api
+    depends_on:
+      - db
+      - redis
