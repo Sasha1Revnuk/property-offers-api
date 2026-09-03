@@ -2,7 +2,7 @@
   "$schema": "https://getcomposer.org/schema.json",
   "name": "laravel/laravel",
   "type": "project",
-  "description": "The skeleton application for the Laravel framework.",
+    "description": "Property Offers JSON API.",
   "keywords": [
     "laravel",
     "framework"
@@ -22,8 +22,7 @@
     "mockery/mockery": "^1.6",
     "nunomaduro/collision": "^8.6",
     "nunomaduro/larastan": "^3.11",
-    "pestphp/pest": "^5.1",
-    "pestphp/pest-plugin-laravel": "^5.0"
+    "phpunit/phpunit": "^13.3"
   },
   "autoload": {
     "psr-4": {
@@ -38,29 +37,33 @@
     }
   },
   "scripts": {
-    "setup": [
-      "composer install",
-      "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
-      "@php artisan key:generate",
-      "@php artisan migrate --force",
-      "npm install --ignore-scripts",
-      "npm run build"
+        "setup": [
+            "composer install",
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
+            "@php artisan key:generate",
+            "@php artisan migrate --force"
+        ],
+        "lint": [
+      "./vendor/bin/pint --format agent"
     ],
-    "dev": [
-      "Composer\\Config::disableProcessTimeout",
-      "@php artisan dev"
+    "lint:check": [
+      "./vendor/bin/pint --test"
+    ],
+    "types:check": [
+      "@stan"
     ],
     "test": [
       "@php artisan config:clear --ansi @no_additional_args",
-      "@php artisan test"
+      "@lint:check",
+      "@types:check",
+      "@php artisan test --ansi --compact"
     ],
     "post-autoload-dump": [
       "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
       "@php artisan package:discover --ansi"
     ],
     "post-update-cmd": [
-      "@php artisan vendor:publish --tag=laravel-assets --ansi --force",
-      "@php artisan boost:update --ansi"
+      "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
     ],
     "post-root-package-install": [
       "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
@@ -87,7 +90,6 @@
     "preferred-install": "dist",
     "sort-packages": true,
     "allow-plugins": {
-      "pestphp/pest-plugin": true,
       "php-http/discovery": true
     }
   },

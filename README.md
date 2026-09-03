@@ -2,11 +2,12 @@
 
 ## About Project
 
-## Project Technologies
+JSON API (Laravel). No Blade, Vite, or npm frontend.
 
 ## Begin Local Development Via Makefile Command:
 
-## Frontend build:
+See `Makefile` (`make init`, `make up`). Commands run inside Docker (`docker compose exec php ...`).
 
-- Build: `npm run build`
-- Dev: `npm run dev`
+- Root: `GET /` — JSON info
+- Health: `GET /api/health`
+- Laravel health: `GET /up`

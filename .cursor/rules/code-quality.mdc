@@ -1,0 +1,80 @@
+---
+description: PHP code standards (Pint + PHPStan level 8) and permission to run quality checks
+alwaysApply: true
+---
+
+# Code Quality
+
+All PHP in scoped paths must pass **Pint** (`pint.json`) and **PHPStan level 8** (`phpstan.neon`).
+
+> Run every command below **inside the `php` Docker service** — see the `docker` rule: `docker compose exec php ...` or `docker compose exec -T php ...`.
+
+## Standards
+
+### Pint (`pint.json`)
+
+- Preset: **PSR-12** with project overrides
+- Alphabetically ordered imports, one import per statement, no unused imports
+- Explicit visibility on all properties and methods
+- No trailing whitespace; single blank line at EOF
+
+After PHP changes, format with:
+
+```bash
+docker compose exec php composer lint
+# or for changed files only:
+docker compose exec php vendor/bin/pint --dirty --format agent
+```
+
+### PHPStan (`phpstan.neon`)
+
+- **Level 8** — strictest practical level
+- Analysed paths: `app/`, `database/factories/`, `database/seeders/`, `routes/`, `tests/`
+- Required practices when writing new code:
+  - Explicit return types and parameter types on all methods
+  - Typed iterable/array shapes in PHPDoc where arrays carry structure
+  - No reliance on dynamic or uninitialized properties
+  - Avoid `mixed` unless truly unavoidable — prefer concrete types
+  - Avoid short ternary (`?:`) — use null coalescing or full ternary
+
+Verify with:
+
+```bash
+docker compose exec php composer types:check
+# equivalent:
+docker compose exec php composer stan
+```
+
+### Eloquent strict mode
+
+`Model::shouldBeStrict()` is enabled in `AppServiceProvider`. This activates:
+
+- **No lazy loading** — eager-load with `with()`, `load()`, or scopes before accessing relations
+- **No silently discarded attributes** — only `$fillable` / `$guarded` fields may be mass-assigned
+- **No missing attributes** — accessing undefined model attributes throws
+
+Keep `$fillable`, casts, selected columns, and API resource mappings explicit and complete.
+
+## Workflow
+
+1. Write code to satisfy Pint and PHPStan — do not defer fixes
+2. Format PHP after edits (`docker compose exec php composer lint` or pint --dirty)
+3. Run the minimal relevant checks before finishing:
+   - PHP only → `docker compose exec -T php composer lint:check` + `composer types:check`
+   - Tests touched → `docker compose exec -T php php artisan test --compact` with file or filter
+4. Do not add new entries to `phpstan-baseline.neon` unless explicitly asked
+
+## Permission to run checks
+
+Agents may run code quality commands **without asking first**:
+
+| Command | Purpose |
+|---------|---------|
+| `composer lint` | Fix PHP formatting |
+| `composer lint:check` | Verify Pint (read-only) |
+| `composer types:check` / `composer stan` | PHPStan analysis |
+| `composer test` / `php artisan test --compact` | Tests (+ lint + stan via `composer test`) |
+
+Prefer `lint:check` when verifying; use `composer lint` after writing PHP.
+
+**Not allowed** without explicit user request: destructive commands, deploys, database resets, git staging/commit/push, or rewriting git history.

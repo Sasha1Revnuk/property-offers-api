@@ -1,16 +1,11 @@
 {
     "agents": [
-        "claude_code"
+        "cursor"
     ],
     "cloud": false,
-    "guidelines": true,
+    "guidelines": false,
     "mcp": true,
     "nightwatch": false,
     "sail": false,
-    "skills": [
-        "infer-conventions",
-        "laravel-best-practices",
-        "testing-best-practices",
-        "tailwindcss-development"
-    ]
+    "skills": []
 }
