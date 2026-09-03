@@ -8,11 +8,21 @@ use Tests\TestCase;
 class ExampleTest extends TestCase
 {
     #[Test]
-    public function the_root_endpoint_returns_json_info(): void
+    public function the_root_endpoint_redirects_to_docs_when_enabled(): void
     {
-        $response = $this->getJson('/');
+        config(['api.docs_enabled' => true]);
 
-        $response->assertOk()
+        $this->get('/')
+            ->assertRedirect('/api/documentation');
+    }
+
+    #[Test]
+    public function the_root_endpoint_returns_json_info_when_docs_disabled(): void
+    {
+        config(['api.docs_enabled' => false]);
+
+        $this->getJson('/')
+            ->assertOk()
             ->assertJsonPath('message', 'Property Offers API');
     }
 
