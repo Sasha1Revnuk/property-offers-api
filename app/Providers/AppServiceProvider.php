@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Services\Api\ApiService;
 use App\Services\Api\Contracts\ApiServiceInterface;
+use App\Services\Import\Contracts\ImportServiceInterface;
+use App\Services\Import\ImportService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -21,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(ApiServiceInterface::class, ApiService::class);
+        $this->app->bind(ImportServiceInterface::class, ImportService::class);
     }
 
     /**
