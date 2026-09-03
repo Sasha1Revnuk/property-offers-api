@@ -16,7 +16,7 @@ use OpenApi\Attributes as OA;
             property: 'next',
             type: 'string',
             nullable: true,
-            example: 'http://localhost:5000/api/v1/properties?page=2',
+            example: 'http://127.0.0.1:5000/api/v1/properties?page=2',
         ),
         new OA\Property(property: 'prev', type: 'string', nullable: true, example: null),
     ],

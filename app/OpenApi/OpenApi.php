@@ -5,7 +5,7 @@ namespace App\OpenApi;
 use OpenApi\Attributes as OA;
 
 if (! defined('L5_SWAGGER_CONST_HOST')) {
-    define('L5_SWAGGER_CONST_HOST', 'http://localhost:5000');
+    define('L5_SWAGGER_CONST_HOST', 'http://127.0.0.1:5000');
 }
 
 #[OA\Info(
