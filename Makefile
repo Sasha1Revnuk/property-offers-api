@@ -24,7 +24,7 @@ setup:
 		sleep 2; \
 		i=$$((i + 1)); \
 	done
-	docker compose exec -T -u fpm_user $(APP_CONTAINER) bash -c "sudo chmod -R 777 storage/framework storage/logs || chmod -R 777 storage/framework storage/logs"
+	docker compose exec -t -i -u fpm_user $(APP_CONTAINER) sudo chmod -R 777 storage/framework storage/logs
 	docker compose exec -T -u fpm_user $(APP_CONTAINER) php artisan storage:link --no-interaction || true
 	docker compose exec -T -u fpm_user $(APP_CONTAINER) php artisan migrate --seed --no-interaction
 	docker compose exec -T -u fpm_user $(APP_CONTAINER) php artisan l5-swagger:generate --no-interaction
